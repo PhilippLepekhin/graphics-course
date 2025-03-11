@@ -1,10 +1,12 @@
 #version 430
 
-layout(local_size_x = 32, local_size_y = 32) in;
 
-layout(binding = 0, rgba8) uniform image2D resultImage;
+layout(location = 0) out vec4 fragColor;
 
-layout(push_constant) uniform pushed_params 
+layout(binding = 0) uniform sampler2D emp;
+layout(binding = 1) uniform sampler2D iChannel0;
+layout(binding = 2) uniform pushed_params 
+
 {
   uint resolution_x;
   uint resolution_y;
@@ -17,10 +19,12 @@ float iTime;
 vec2 iResolution;
 vec2 iMouse;
 
+
 const float SCALECOUNT = 150.0;
 const float INVSC = 1.0 / SCALECOUNT;
 const float RSPEED = 4.0;
 const float NV = 0.2;
+
 
 
 float noise_texture(vec2 uv) {
@@ -39,6 +43,7 @@ vec4 freqAnalysis() { // extracting frequency for noise
     samp.w = noise_texture(vec2(1.0, 0.0));
     return samp;
 }
+
 
 
 vec3 rgb2hsv(in vec3 c) {
@@ -259,6 +264,33 @@ struct cam {
 cam mainCam = cam(vec3(0.0, 0.0, 5.0), vec3(0.0, 0.0, -1.0), vec3(0.0, 1.0, 0.0), 90.0);
 
 
+vec3 getSkyboxColor(vec2 rd, sampler2D tex) {
+    return texture(tex, rd).rgb;
+}
+
+
+vec3 triplanarTexture(vec3 pos, vec3 normal) {
+    vec3 blend = abs(normal);
+    blend /= (blend.x + blend.y + blend.z);
+
+    vec2 uvX = pos.yz;
+    vec2 uvY = pos.xz;
+    vec2 uvZ = pos.xy;
+
+    vec3 texX = texture(emp, uvX).rgb;
+    vec3 texY = texture(emp, uvY).rgb;
+    vec3 texZ = texture(emp, uvZ).rgb;
+
+    return texX * blend.x + texY * blend.y + texZ * blend.z;
+}
+
+
+vec3 proceduralTex(sampler2D tex, vec3 pos) {
+    vec2 uv = pos.xy * 0.5 + 0.5;
+    return texture(tex, uv).rgb;
+}
+
+
 void mainImage( out vec4 fragColor, in vec2 fragCoord )
 {
     vec2 mouseAng = (iMouse.xy * 2.0 - iResolution.xy) * RSPEED / iResolution.x;
@@ -287,38 +319,42 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     
     bool hit = sdDistortedSphere(vec3(0.0), rd, fCamPos, sr, sr + 1.0, n, sd);
     
-    vec3 color = vec3(0.01);
+    vec3 color;
     
-    if (hit) {
-        float w = max(max(freqs.x,freqs.y) , max(freqs.z, freqs.w));
-        vec2 nMult = vec2(sin(iTime * 1.4), cos(iTime * 1.2));
-        vec3 l = normalize(vec3(-(nMult.x * 2.0 - 1.0), -(nMult.y * 2.0 - 1.0), -0.9 + w * 3.0));
-        float sf = shadowFactor(sd, l, sc, sr, sr + 1.0);
-        
-        color = GetColor(sd);
-        vec3 diff = color * max(dot(-l, n), 0.0 ) * 0.95;
-        vec3 amb = color * 0.5;
-        
-        color = diff;
-        color += amb;
-        color *= diff;
+if (hit) {
+    float w = max(max(freqs.x, freqs.y), max(freqs.z, freqs.w));
+    vec2 nMult = vec2(sin(iTime * 1.4), cos(iTime * 1.2));
+    vec3 l = normalize(vec3(-(nMult.x * 2.0 - 1.0), -(nMult.y * 2.0 - 1.0), -0.9 + w * 3.0));
+    float sf = shadowFactor(sd, l, sc, sr, sr + 1.0);
+    
+    vec3 texColor = triplanarTexture(sd, n);
+    vec3 procTexColor = proceduralTex(emp, sd);
+    
+    color = mix(GetColor(sd), texColor, 0.5);
+    color = mix(color, procTexColor, 0.7);
+
+    vec3 diff = color * max(dot(-l, n), 0.0 ) * 0.95;
+    vec3 amb = color * 0.5;
+    
+    color = diff;
+    color += amb;
+    color *= diff;
+}
+
+    else {
+        color = getSkyboxColor(rd.xy, iChannel0);
     }
     
     fragColor = vec4(pow(color, vec3(0.55)), 1.0);
 }
 
-void main()
+void main( )
 {
-  ivec2 uv = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 fragCoord = ivec2(gl_FragCoord.xy);
 
   iResolution = vec2(pushed_params_t.resolution_x, pushed_params_t.resolution_y);
   iTime = pushed_params_t.time;
   iMouse = vec2(pushed_params_t.mouse_x, pushed_params_t.mouse_y);
 
-  vec4 fragColor;
-  vec2 fragCoord = vec2(gl_GlobalInvocationID.xy);
   mainImage(fragColor, fragCoord);
-
-  if (uv.x < pushed_params_t.resolution_x && uv.y < pushed_params_t.resolution_y)
-    imageStore(resultImage, uv, fragColor);
 }
