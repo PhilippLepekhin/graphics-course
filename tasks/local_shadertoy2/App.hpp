@@ -1,13 +1,18 @@
 #pragma once
 
+#include <etna/Etna.hpp>
 #include <etna/Window.hpp>
+#include <etna/PipelineManager.hpp>
 #include <etna/PerFrameCmdMgr.hpp>
 #include <etna/ComputePipeline.hpp>
+#include <etna/GraphicsPipeline.hpp>
 #include <etna/Image.hpp>
-
 #include <etna/Sampler.hpp>
+#include <etna/GlobalContext.hpp>
+#include <etna/RenderTargetStates.hpp>
+#include <etna/BlockingTransferHelper.hpp>
 #include <chrono>
-
+#include <stb_image.h>
 #include "wsi/OsWindowingManager.hpp"
 
 
@@ -22,7 +27,6 @@ public:
 private:
   void drawFrame();
 
-private:
   OsWindowingManager windowing;
   std::unique_ptr<OsWindow> osWindow;
 
@@ -31,18 +35,27 @@ private:
 
   std::unique_ptr<etna::Window> vkWindow;
   std::unique_ptr<etna::PerFrameCmdMgr> commandManager;
+  std::unique_ptr<etna::OneShotCmdMgr> oneShotManager;
 
-  etna::Sampler sampler;
+  etna::ComputePipeline computePipeline;
   etna::Image bufImage;
-  etna::ComputePipeline pipeline;
+  etna::Sampler sampler;
 
-  struct {
+  etna::GraphicsPipeline graphicsPipeline;
+  etna::Image image;
+
+  etna::Sampler graphicsSampler;
+
+
+  struct
+  {
     uint32_t size_x;
     uint32_t size_y;
     float time;
     float mouse_x;
     float mouse_y;
   } pushedParams;
+
 
   std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
 };
