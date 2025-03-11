@@ -1,9 +1,13 @@
 #version 430
+#extension GL_GOOGLE_include_directive : require
+
+
+#include "cpp_glsl_compat.h"
 
 layout (local_size_x = 32, local_size_y = 32) in;
 layout (binding = 0, rgba8) uniform image2D resultImage;
 
-layout(push_constant) uniform pushed_params {
+layout(binding = 1) uniform pushed_params {
   uint resolution_x;
   uint resolution_y;
   float time;
